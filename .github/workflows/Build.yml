@@ -1,0 +1,207 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: '8.5'
+
+      - name: Create Android project structure
+        run: |
+          # ── settings.gradle ──────────────────────────────────────────
+          cat > settings.gradle << 'SETTINGS'
+          pluginManagement {
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
+          rootProject.name = "AZDownloader"
+          include ':app'
+          SETTINGS
+
+          # ── root build.gradle ─────────────────────────────────────────
+          cat > build.gradle << 'BUILDROOT'
+          buildscript {
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+              dependencies {
+                  classpath 'com.android.tools.build:gradle:8.2.2'
+              }
+          }
+          allprojects {
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+          task clean(type: Delete) {
+              delete rootProject.buildDir
+          }
+          BUILDROOT
+
+          # ── gradle.properties ─────────────────────────────────────────
+          cat > gradle.properties << 'GRADLEPROP'
+          org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
+          android.useAndroidX=true
+          android.enableJetifier=true
+          GRADLEPROP
+
+          # ── app/build.gradle ──────────────────────────────────────────
+          mkdir -p app/src/main/java/video/downloader/videodownloader/activity
+          mkdir -p app/src/main/java/video/downloader/videodownloader/app
+          mkdir -p app/src/main/res/values
+          mkdir -p app/src/main/res/xml
+          mkdir -p app/src/main/res/layout
+
+          cat > app/build.gradle << 'APPBUILD'
+          plugins {
+              id 'com.android.application'
+          }
+          android {
+              namespace 'video.downloader.videodownloader'
+              compileSdk 34
+              defaultConfig {
+                  applicationId "video.downloader.videodownloader"
+                  minSdk 21
+                  targetSdk 34
+                  versionCode 157
+                  versionName "2.5.7"
+                  multiDexEnabled true
+              }
+              buildTypes {
+                  debug { debuggable true }
+                  release {
+                      minifyEnabled false
+                      proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+                  }
+              }
+              compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_11
+                  targetCompatibility JavaVersion.VERSION_11
+              }
+              lint {
+                  abortOnError false
+                  checkReleaseBuilds false
+              }
+          }
+          dependencies {
+              implementation 'androidx.appcompat:appcompat:1.6.1'
+              implementation 'com.google.android.material:material:1.11.0'
+              implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+              implementation 'androidx.multidex:multidex:2.0.1'
+          }
+          APPBUILD
+
+          # ── proguard-rules.pro ────────────────────────────────────────
+          touch app/proguard-rules.pro
+
+          # ── AndroidManifest.xml ───────────────────────────────────────
+          cat > app/src/main/AndroidManifest.xml << 'MANIFEST'
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <uses-permission android:name="android.permission.INTERNET" />
+              <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+              <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
+              <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+              <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+              <application
+                  android:name=".app.BrowserApp"
+                  android:allowBackup="true"
+                  android:label="@string/app_name"
+                  android:theme="@style/AppTheme"
+                  android:usesCleartextTraffic="true">
+                  <activity
+                      android:name=".activity.MainActivity"
+                      android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          MANIFEST
+
+          # ── res/values/strings.xml ────────────────────────────────────
+          cat > app/src/main/res/values/strings.xml << 'STRINGS'
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <string name="app_name">A-Z Downloader</string>
+          </resources>
+          STRINGS
+
+          # ── res/values/styles.xml ─────────────────────────────────────
+          cat > app/src/main/res/values/styles.xml << 'STYLES'
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <style name="AppTheme" parent="Theme.AppCompat.Light.NoActionBar">
+                  <item name="colorPrimary">#1976D2</item>
+                  <item name="colorPrimaryDark">#1565C0</item>
+                  <item name="colorAccent">#FF4081</item>
+              </style>
+          </resources>
+          STYLES
+
+          # ── BrowserApp.java ───────────────────────────────────────────
+          cat > app/src/main/java/video/downloader/videodownloader/app/BrowserApp.java << 'BROWSERAPP'
+          package video.downloader.videodownloader.app;
+          import androidx.multidex.MultiDexApplication;
+          public class BrowserApp extends MultiDexApplication {
+              @Override public void onCreate() { super.onCreate(); }
+          }
+          BROWSERAPP
+
+          # ── MainActivity.java ─────────────────────────────────────────
+          cat > app/src/main/java/video/downloader/videodownloader/activity/MainActivity.java << 'MAINACT'
+          package video.downloader.videodownloader.activity;
+          import androidx.appcompat.app.AppCompatActivity;
+          import android.os.Bundle;
+          public class MainActivity extends AppCompatActivity {
+              @Override protected void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+              }
+          }
+          MAINACT
+
+          echo "Project structure created successfully"
+          find . -not -path './.git/*' -not -path './gradle/*' | sort
+
+      - name: Generate Gradle wrapper
+        run: gradle wrapper --gradle-version 8.5
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Build debug APK
+        run: ./gradlew assembleDebug --stacktrace
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-debug
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
